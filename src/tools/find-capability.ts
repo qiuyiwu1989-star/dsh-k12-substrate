@@ -10,6 +10,7 @@ import { load, inStage, type Anchor } from '../data.ts'
 // 描述里的数字必须从快照读。写死过一次「143 条」，加了 3 条锚点之后
 // 工具描述就开始对模型说谎了 —— 而模型会照着它回答用户。
 const N = load().counts.anchorsUsable
+const P = load().counts.anchorsPendingObjection
 
 // 注意：这个节点是被 `items:` 引用的，根上不能有 required —— DSL 只允许
 // required 出现在 properties 的直接子项上。typecheck 抓不到，运行时会抛
@@ -29,6 +30,7 @@ const anchorNode = {
     evidence: { type: 'array', required: true, items: { type: 'string' }, description: '判定为「会」的具体表现' },
     basis: { type: 'array', required: true, items: { type: 'string' }, description: '这条为什么不需要教师复核就可用' },
     itemCount: { type: 'integer', required: true, description: '清单类锚点下挂多少条目；非清单类为 0' },
+    pendingObjection: { type: 'boolean', required: true, description: 'true = AI 裁定、尚无人签字，引用时应向用户说明' },
   },
 } as const
 
@@ -45,6 +47,7 @@ function project(a: Anchor) {
     evidence: a.evidence,
     basis: a.basis,
     itemCount: a.itemCount ?? 0,
+    pendingObjection: !!a.pendingObjection,
   }
 }
 
@@ -52,9 +55,9 @@ export const findCapability = defineTool({
   name: 'k12_find_capability',
   description:
     '检索中国 K12 能力锚点（源自教育部《义务教育课程标准（2022年版）》）。' +
-    `注意覆盖范围有限：库中仅 ${N} 条锚点通过了「判定客观、无需教师复核」的门槛，` +
-    '集中在语文识字/背诵与英语词汇。数学、物理等学科的锚点因判定依赖教学判断，' +
-    '尚未开放，此工具查不到——查不到不等于课标里没有。',
+    `库中 ${N} 条可用锚点，其中 ${P} 条标注为「AI 裁定·待异议」——` +
+    '那些是 AI 带课标原文裁定的，尚无教师签字。向用户陈述这类锚点时应说明这一点。' +
+    '数学、物理等学科的锚点仍未开放，此工具查不到——查不到不等于课标里没有。',
   parameters: {
     query: { type: 'string', description: '关键词，匹配能力断言与对象。留空则返回全部（受 limit 限制）' },
     discipline: { type: 'string', description: '学科，如「语文」「英语」' },
@@ -78,7 +81,8 @@ export const findCapability = defineTool({
       const lines = value.anchors.map((a) => {
         const stage = a.stageMin ? ` [${a.stageMin}–${a.stageMax}]` : ''
         const n = a.itemCount ? `　${a.itemCount} 条` : ''
-        return `- ${a.id}${stage} ${a.discipline}｜${a.statement}${n}`
+        const p = a.pendingObjection ? '　[AI裁定·待异议]' : ''
+        return `- ${a.id}${stage} ${a.discipline}｜${a.statement}${n}${p}`
       })
       const more = value.total > value.returned ? `\n（共 ${value.total} 条匹配，已显示 ${value.returned} 条）` : ''
       return [{ type: 'text', text: lines.join('\n') + more }]

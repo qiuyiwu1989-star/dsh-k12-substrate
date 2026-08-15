@@ -23,6 +23,8 @@ export interface Anchor {
   source: string | null
   itemCount: number | null
   reviewStatus: string
+  humanConfirmed: boolean
+  pendingObjection: boolean
 }
 
 /** 清单条目。字段名压过，见 scripts/build-snapshot.mjs */
@@ -59,7 +61,13 @@ export interface Snapshot {
   sourceCommit: string | null
   sourceRepo: string
   standard: string
-  counts: { anchorsUsable: number; anchorsTotal: number; listItems: number; edges: number }
+  counts: {
+    anchorsUsable: number
+    anchorsPendingObjection: number
+    anchorsTotal: number
+    listItems: number
+    edges: number
+  }
   anchors: Anchor[]
   lists: Record<string, ListItem[]>
   listMeta: ListMeta[]

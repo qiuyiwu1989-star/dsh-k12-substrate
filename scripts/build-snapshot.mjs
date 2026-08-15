@@ -4,9 +4,8 @@
  * 为什么要快照而不是直接读源仓库：插件装在别人机器上，那台机器没有 taxonomy
  * 的 checkout。快照随包发布，离线可用。
  *
- * 为什么只导 auto-confirmed：底座的分界线是「能不能写进一个真实孩子的档案」。
- * ai-reviewed 和 disputed 的锚点判定依赖教学判断，还没人复核过 —— 让模型拿去
- * 给孩子下结论，就是把没验过的东西当验过的用。这条在源仓库守着，在这里也必须守。
+ * 导哪些档见下方 USABLE 的注释。ai-reviewed / disputed 一律不导 —— 让模型
+ * 拿没验过的锚点给孩子下结论，就是把没验过的东西当验过的用。
  *
  *   node scripts/build-snapshot.mjs [taxonomy 仓库路径]
  */
@@ -19,8 +18,15 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 const SRC = resolve(process.argv[2] ?? join(HERE, '..', '..', 'os-k12-taxonomy'))
 const OUT = join(HERE, '..', 'data')
 
-/** 只有这两档能被档案引用。改这里等于改底座的分界线，别改。 */
-const USABLE = new Set(['auto-confirmed', 'expert-confirmed'])
+/**
+ * 能被档案引用的档位。改这里等于改底座的分界线 —— 改之前先想清楚。
+ *
+ * ai-adjudicated 是用户明示授权「AI 先判、人有异议再改」后新增的一档：
+ * AI 带全部材料裁定过，但**没有人签过字**。它和另外两档的区别必须一路
+ * 透传到工具返回值里，否则「有异议再改」无从提起 —— 使用者根本不知道
+ * 哪些是待异议的。
+ */
+const USABLE = new Set(['auto-confirmed', 'expert-confirmed', 'ai-adjudicated'])
 
 function walk(dir) {
   const out = []
@@ -69,6 +75,9 @@ const slimAnchors = usable.map((a) => ({
   source: a.provenance?.source ?? a.evidenceSource ?? null,
   itemCount: a.provenance?.itemCount ?? null,
   reviewStatus: a.reviewStatus,
+  // 人有没有签过字。产品要据此决定显示强度（「已确认」vs「待确认」）
+  humanConfirmed: a.reviewStatus === 'expert-confirmed',
+  pendingObjection: a.reviewStatus === 'ai-adjudicated',
 }))
 
 // ── 清单条目：这是体量大头，字段压到最小 ──────────────────────────
@@ -120,6 +129,7 @@ const snapshot = {
   standard: '中华人民共和国教育部《义务教育课程标准（2022年版）》',
   counts: {
     anchorsUsable: slimAnchors.length,
+    anchorsPendingObjection: slimAnchors.filter((a) => a.pendingObjection).length,
     anchorsTotal: anchors.length,
     listItems: slimLists.length,
     edges: slimEdges.length,
@@ -136,7 +146,9 @@ writeFileSync(file, JSON.stringify(snapshot))
 const kb = (statSync(file).size / 1024).toFixed(0)
 
 console.log(`✓ ${file}  ${kb} KB`)
-console.log(`  可用锚点 ${slimAnchors.length} / ${anchors.length}（只导 auto-confirmed / expert-confirmed）`)
+const pend = slimAnchors.filter((a) => a.pendingObjection).length
+console.log(`  可用锚点 ${slimAnchors.length} / ${anchors.length}`
+  + `（其中 ${pend} 条为 AI 裁定待异议，${slimAnchors.length - pend} 条判定客观）`)
 console.log(`  清单条目 ${slimLists.length}，分 ${listMeta.length} 张表`)
 console.log(`  边 ${slimEdges.length}（两端都可用的才留）`)
 for (const m of listMeta) console.log(`    ${m.id.padEnd(30)} ${String(m.count).padStart(5)} 条  ${m.kind}`)
