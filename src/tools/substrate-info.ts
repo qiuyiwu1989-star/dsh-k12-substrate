@@ -2,7 +2,7 @@
  * k12_substrate_info — 这个底座是什么、覆盖到哪、哪里靠不住。
  *
  * 存在的理由：模型手里一旦有个叫「K12 知识底座」的工具，很容易默认它覆盖全学科，
- * 然后拿 143 条语文/英语清单锚点去回答数学问题，并且答得很像样。
+ * 然后拿这一百多条语文/英语清单锚点去回答数学问题，并且答得很像样。
  * 这个工具让边界成为可查的事实，而不是靠提示词嘱咐。
  */
 import { defineTool } from '@deepseek-ai/dsh-tools'
@@ -53,6 +53,8 @@ export const substrateInfo = defineTool({
       ].join('\n'),
     }],
   },
+  presentCall: () => ({ card: 'generic', title: '查底座覆盖范围与已知局限', kind: 'read' }),
+
   async execute() {
     const snap = load()
     return {

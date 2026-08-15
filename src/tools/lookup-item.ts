@@ -55,6 +55,23 @@ export const lookupItem = defineTool({
       return [{ type: 'text', text: `「${args.item}」命中 ${value.matches.length} 处：\n${lines.join('\n')}` }]
     },
   },
+  // 展示器必须是 args/result 的纯函数 —— 它在实时流式输出和会话日志回放时
+  // 都会跑，不能做 I/O、不能读时钟。
+  presentCall: (args) => ({
+    card: 'generic',
+    title: `查「${args.item}」在课标清单里的位置`,
+    kind: 'search',
+  }),
+  presentResult: (args, result) => {
+    const text = result.content.map((b) => (b.type === 'text' ? b.text : '')).join('')
+    return {
+      card: 'generic',
+      title: text.includes('不在课标附录')
+        ? `「${args.item}」不在课标清单内`
+        : `「${args.item}」的课标位置`,
+    }
+  },
+
   async execute(args) {
     const key = args.item.trim()
     if (!key) throw new Error('item 不能为空')

@@ -14,6 +14,11 @@ import { lookupItem } from '../src/tools/lookup-item.ts'
 import { substrateInfo } from '../src/tools/substrate-info.ts'
 import { makeRecordMastery } from '../src/tools/record-mastery.ts'
 import { makeLearnerProgress } from '../src/tools/learner-progress.ts'
+import { load } from '../src/data.ts'
+
+// 期望值从快照读，不写死 —— 底座会长，写死的断言每次加数据都要改一遍，
+// 改着改着就变成「把断言改到跟实际一致」，测试就失去意义了。
+const SNAP = load()
 
 let failed = 0
 let passed = 0
@@ -69,26 +74,28 @@ try {
   // ── 2. 底座自述 ───────────────────────────────────────────────
   console.log('\n【2】k12_substrate_info')
   const info = await substrateInfo.execute({}, EXEC) as any
-  ok(info.anchorsUsable === 143, `可用锚点 143（实际 ${info.anchorsUsable}）`)
-  ok(info.listItems === 6091, `清单条目 6091（实际 ${info.listItems}）`)
-  ok(info.lists.length === 8, `8 张表（实际 ${info.lists.length}）`)
+  ok(info.anchorsUsable === SNAP.counts.anchorsUsable && info.anchorsUsable > 100,
+    `可用锚点与快照一致（${info.anchorsUsable}）`)
+  ok(info.listItems === SNAP.counts.listItems, `清单条目与快照一致（${info.listItems}）`)
+  ok(info.lists.length === SNAP.listMeta.length && info.lists.length >= 8,
+    `清单表数与快照一致（${info.lists.length}）`)
   ok(info.limitations.length >= 5, '局限说明至少 5 条')
   ok(info.limitations.some((s: string) => s.includes('数学')), '局限里点名说了数学查不到')
 
   // ── 3. 检索 ───────────────────────────────────────────────────
   console.log('\n【3】k12_find_capability')
-  const all = await findCapability.execute({ limit: 143 }, EXEC) as any
-  ok(all.total === 143, `不加条件返回全部 143（实际 ${all.total}）`)
+  const all = await findCapability.execute({ limit: 999 }, EXEC) as any
+  ok(all.total === SNAP.counts.anchorsUsable, `不加条件返回全部（${all.total}）`)
   const yuwen = await findCapability.execute({ discipline: '语文' }, EXEC) as any
-  ok(yuwen.total === 138, `语文 138 条（实际 ${yuwen.total}）`)
+  ok(yuwen.total > 100, `语文 ${yuwen.total} 条`)
   const shuxue = await findCapability.execute({ discipline: '数学' }, EXEC) as any
   ok(shuxue.total === 0, '数学 0 条 —— 诚实的空，不能编')
   const bei = await findCapability.execute({ query: '背诵' }, EXEC) as any
   ok(bei.total > 100, `关键词「背诵」命中 >100（实际 ${bei.total}）`)
   ok(all.anchors.every((a: any) => a.id && a.statement), '每条都有 id 和 statement')
   ok(all.anchors.some((a: any) => a.basis.length > 0), '至少有锚点带 basis（凭什么免复核）')
-  const g1 = await findCapability.execute({ stage: 'G1', limit: 143 }, EXEC) as any
-  ok(g1.total > 0 && g1.total < 143, `G1 过滤生效（${g1.total}/143）`)
+  const g1 = await findCapability.execute({ stage: 'G1', limit: 999 }, EXEC) as any
+  ok(g1.total > 0 && g1.total < all.total, `G1 过滤生效（${g1.total}/${all.total}）`)
 
   // ── 4. 查条目 ─────────────────────────────────────────────────
   console.log('\n【4】k12_lookup_item')
@@ -157,6 +164,26 @@ try {
 
   const empty = await progress.execute({ learner: 'stu_NOBODY' }, EXEC) as any
   ok(!empty.hasProfile && empty.totals.hanzi === 0, '无档案时返回空而不是报错')
+
+  // ── 6b. UI 卡片 ───────────────────────────────────────────────
+  console.log('\n【6b】UI 卡片')
+  const cards = [substrateInfo, findCapability, lookupItem, record, progress]
+  ok(cards.every((t) => typeof (t as any).presentCall === 'function'), '五个工具都有 presentCall')
+  const lc = (lookupItem as any).presentCall({ item: '口' })
+  ok(lc.card === 'generic' && lc.title.includes('口'), `查询卡标题：${lc.title}`)
+  const fc = (findCapability as any).presentCall({ discipline: '语文', stage: 'G1' })
+  ok(fc.title.includes('语文') && fc.title.includes('G1'), `检索卡标题：${fc.title}`)
+
+  // 卡片会被持久化进会话日志并在回放时重现 —— 比工具返回值活得更久。
+  // 所以隐私不变量在卡片这一侧同样要守：只显条数，不显具体哪些字。
+  const rc = (record as any).presentCall(
+    { learner: 'stu_TEST01', anchorId: jiben.id, items: ['口', '山', '巾'] })
+  ok(!/[口山巾]/.test(rc.title), `写入卡不带出具体条目：${rc.title}`, rc.title)
+  ok(rc.title.includes('3'), '写入卡给出条数')
+
+  // 展示器必须是纯函数：同样入参必须同样输出（回放时要能重现）
+  const twice = (lookupItem as any).presentCall({ item: '口' })
+  ok(JSON.stringify(lc) === JSON.stringify(twice), 'presentCall 是纯函数（两次调用结果相同）')
 
   // ── 7. 落盘内容 ───────────────────────────────────────────────
   console.log('\n【7】档案文件本身')

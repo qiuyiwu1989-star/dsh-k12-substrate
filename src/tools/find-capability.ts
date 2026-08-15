@@ -7,6 +7,10 @@
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { load, inStage, type Anchor } from '../data.ts'
 
+// 描述里的数字必须从快照读。写死过一次「143 条」，加了 3 条锚点之后
+// 工具描述就开始对模型说谎了 —— 而模型会照着它回答用户。
+const N = load().counts.anchorsUsable
+
 // 注意：这个节点是被 `items:` 引用的，根上不能有 required —— DSL 只允许
 // required 出现在 properties 的直接子项上。typecheck 抓不到，运行时会抛
 // UNSUPPORTED_SCHEMA。
@@ -48,14 +52,14 @@ export const findCapability = defineTool({
   name: 'k12_find_capability',
   description:
     '检索中国 K12 能力锚点（源自教育部《义务教育课程标准（2022年版）》）。' +
-    '注意覆盖范围有限：库中仅 143 条锚点通过了「判定客观、无需教师复核」的门槛，' +
+    `注意覆盖范围有限：库中仅 ${N} 条锚点通过了「判定客观、无需教师复核」的门槛，` +
     '集中在语文识字/背诵与英语词汇。数学、物理等学科的锚点因判定依赖教学判断，' +
     '尚未开放，此工具查不到——查不到不等于课标里没有。',
   parameters: {
     query: { type: 'string', description: '关键词，匹配能力断言与对象。留空则返回全部（受 limit 限制）' },
     discipline: { type: 'string', description: '学科，如「语文」「英语」' },
     stage: { type: 'string', description: '学段 G1–G9，返回该学段适用的锚点' },
-    limit: { type: 'integer', description: '返回上限，默认 20，最大 143' },
+    limit: { type: 'integer', description: `返回上限，默认 20，最大 ${N}` },
   },
   output: {
     schema: {
@@ -69,7 +73,7 @@ export const findCapability = defineTool({
     },
     render: (_args, value) => {
       if (value.returned === 0) {
-        return [{ type: 'text', text: '没有匹配的锚点。库中仅 143 条可用锚点，集中在语文识字/背诵与英语词汇。' }]
+        return [{ type: 'text', text: `没有匹配的锚点。库中仅 ${N} 条可用锚点，集中在语文识字/背诵与英语词汇。` }]
       }
       const lines = value.anchors.map((a) => {
         const stage = a.stageMin ? ` [${a.stageMin}–${a.stageMax}]` : ''
@@ -80,10 +84,19 @@ export const findCapability = defineTool({
       return [{ type: 'text', text: lines.join('\n') + more }]
     },
   },
+  presentCall: (args) => {
+    const bits = [args.discipline, args.stage, args.query].filter(Boolean)
+    return {
+      card: 'generic',
+      title: bits.length ? `检索能力锚点：${bits.join(' · ')}` : '列出全部可用能力锚点',
+      kind: 'search',
+    }
+  },
+
   async execute(args) {
     const snap = load()
     const q = args.query?.trim()
-    const limit = Math.min(Math.max(args.limit ?? 20, 1), 143)
+    const limit = Math.min(Math.max(args.limit ?? 20, 1), N)
 
     let hits = snap.anchors
     if (args.discipline) {

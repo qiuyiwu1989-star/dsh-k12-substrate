@@ -10,16 +10,16 @@ Data comes from [China's MOE *Compulsory Education Curriculum Standards (2022)*]
 
 This section comes first, because **mistaking it for full-curriculum coverage is worse than not installing it**.
 
-1,334 candidate anchors were extracted from the standards. **Only 143** cleared the bar of "objectively decidable, no teacher review required" and ship in this package:
+1,339 candidate anchors were extracted from the standards. **Only 146** cleared the bar of "objectively decidable, no teacher review required" and ship in this package:
 
 | | count |
 |---|---|
 | Fragments cut from the standards | 4,841 |
-| Passed the decidability gate | 1,334 |
-| Survived AI review | 595 |
-| **Writable to a child's profile (what this plugin exposes)** | **143** |
+| Passed the decidability gate | 1,339 |
+| Survived AI review | 600 |
+| **Writable to a child's profile (what this plugin exposes)** | **146** |
 
-Those 143 concentrate in **Chinese character recognition/writing/recitation** and **English vocabulary** — because correctness there is objective: either the character is written correctly or it isn't.
+Those 146 concentrate in **Chinese character recognition/writing/recitation** and **English vocabulary** — because correctness there is objective: either the character is written correctly or it isn't.
 
 **Math, physics, and chemistry anchors are not available.** Judging them requires pedagogical judgement ("can apply the number-shape combination idea"), and no teacher has reviewed them, so they are excluded. `k12_substrate_info` reports this boundary, and `k12_find_capability` honestly returns 0 results for math — **absence here does not mean absence from the standards**.
 
@@ -69,14 +69,14 @@ The last two can be disabled with `readOnly: true`.
 Only a `holder` starting with `teacher:` or `parent:` is recorded as `confirmed`. The model saying a child knows something does not make it so, and silence is not confirmation. `k12_learner_progress` reports the two separately.
 
 **3. Only usable anchors can be referenced.**
-An assertion pointing at an unreviewed anchor means measuring a child with an unvalidated ruler. Passing an ID outside the 143 raises an error.
+An assertion pointing at an unreviewed anchor means measuring a child with an unvalidated ruler. Passing an ID outside the 146 raises an error.
 
 ## Development
 
 ```bash
 pnpm install
 pnpm snapshot   # rebuild the data snapshot from ../os-k12-taxonomy
-pnpm verify     # typecheck + 63 assertions
+pnpm verify     # typecheck + 69 assertions
 pnpm build
 ```
 

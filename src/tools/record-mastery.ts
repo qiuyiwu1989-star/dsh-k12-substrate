@@ -80,11 +80,25 @@ export function makeRecordMastery(profileDir: string) {
         return [{ type: 'text', text: parts.join('\n') }]
       },
     },
+    // 卡片同样守隐私不变量：只显条数，不显具体哪些字/词。
+    // 卡片会被持久化进会话日志并在回放时重现，比工具返回值活得更久。
+    presentCall: (args) => ({
+      card: 'generic',
+      title: args.items?.length
+        ? `记录 ${args.learner} 掌握 ${args.items.length} 个条目`
+        : `记录 ${args.learner} 掌握一条能力`,
+      kind: 'edit',
+    }),
+    presentResult: (_args, result) => {
+      const text = result.content.map((b) => (b.type === 'text' ? b.text : '')).join('')
+      return { card: 'generic', title: text.split('\n')[0] ?? '已记录' }
+    },
+
     async execute(args) {
       const anchor = getAnchor(args.anchorId)
       if (!anchor) {
         throw new Error(
-          `锚点 ${args.anchorId} 不在可用集合内。档案只能引用经确认的锚点（当前 143 条）；` +
+          `锚点 ${args.anchorId} 不在可用集合内。档案只能引用经确认的锚点（当前 ${load().counts.anchorsUsable} 条）；` +
           `先用 k12_find_capability 查到合法 ID。`,
         )
       }

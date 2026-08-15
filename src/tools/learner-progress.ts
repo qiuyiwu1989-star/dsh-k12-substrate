@@ -98,6 +98,14 @@ export function makeLearnerProgress(profileDir: string) {
         return [{ type: 'text', text: [...head, '', ...rows, ...next, '', value.limitation].join('\n') }]
       },
     },
+    presentCall: (args) => ({
+      card: 'generic', title: `汇总 ${args.learner} 的学习进度`, kind: 'read',
+    }),
+    presentResult: (_args, result) => {
+      const text = result.content.map((b) => (b.type === 'text' ? b.text : '')).join('')
+      return { card: 'generic', title: text.split('\n')[0] ?? '进度' }
+    },
+
     async execute(args) {
       const p = profile.read(profileDir, args.learner)
       const limit = Math.max(args.suggestNext ?? 10, 0)
