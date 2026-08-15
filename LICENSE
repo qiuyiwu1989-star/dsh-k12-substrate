@@ -1,0 +1,39 @@
+本插件采用双许可，与上游数据仓库
+https://github.com/qiuyiwu1989-star/k12-knowledge-substrate 保持一致：
+
+- **代码**（src/ 与 scripts/）：MIT
+
+- **随包分发的数据快照**（data/substrate.json —— 结构、ID、关系、清单）：
+  Open Database License (ODbL) v1.0
+  全文见 https://opendatacommons.org/licenses/odbl/1-0/
+
+- **数据中本项目撰写的文本**（statement / assessment / evidence / reason）：
+  CC BY-SA 4.0
+  全文见 https://creativecommons.org/licenses/by-sa/4.0/
+
+- **课标原文**：不随本插件分发，权利归中华人民共和国教育部。
+  溯源见上游仓库 PROVENANCE.md
+
+---
+
+MIT License (applies to code in src/ and scripts/)
+
+Copyright (c) 2026 qiuyiwu
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

@@ -1,0 +1,78 @@
+{
+  "name": "dsh-k12-substrate",
+  "version": "0.1.0",
+  "description": "K12 capability substrate for DeepSeek Harness: 143 objectively-decidable capability anchors and 6,091 list items extracted from China's MOE 2022 curriculum standards, with local-only learner profiles",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "data/substrate.json",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh.md"
+  ],
+  "license": "MIT",
+  "author": {
+    "name": "qiuyiwu",
+    "url": "https://github.com/qiuyiwu1989-star"
+  },
+  "homepage": "https://github.com/qiuyiwu1989-star/dsh-k12-substrate#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/qiuyiwu1989-star/dsh-k12-substrate.git"
+  },
+  "bugs": {
+    "url": "https://github.com/qiuyiwu1989-star/dsh-k12-substrate/issues"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "k12",
+    "education",
+    "curriculum",
+    "chinese",
+    "knowledge-graph",
+    "ai-agent"
+  ],
+  "engines": {
+    "node": "^22.19.0 || >=24"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "snapshot": "node scripts/build-snapshot.mjs",
+    "build": "node -e \"require('node:fs').rmSync('lib',{recursive:true,force:true})\" && tsdown && tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --experimental-strip-types scripts/smoke.ts",
+    "verify": "pnpm typecheck && pnpm test",
+    "prepublishOnly": "pnpm build && pnpm verify"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-tools": "^0.1.0-rc.6"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-tools": "0.1.0-rc.6",
+    "@types/node": "^24.13.3",
+    "tsdown": "0.22.2",
+    "typescript": "^5.9.3"
+  }
+}

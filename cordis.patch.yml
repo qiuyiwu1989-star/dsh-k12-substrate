@@ -1,0 +1,11 @@
+# 把 K12 能力底座插入 harness 的插件组合。
+#   pnpm dsh web --patch ./node_modules/dsh-k12-substrate/cordis.patch.yml
+- insert:
+    - id: k12-substrate
+      name: 'dsh-k12-substrate'
+      config:
+        # 学习者档案目录。留空则用 ~/.dsh-k12-substrate/profiles/
+        # 这是 L3 私有数据，只落本机
+        profileDir: ''
+        # 设为 true 则只注册查询工具，不注册档案读写
+        readOnly: false
