@@ -80,7 +80,10 @@ try {
   ok(info.lists.length === SNAP.listMeta.length && info.lists.length >= 8,
     `清单表数与快照一致（${info.lists.length}）`)
   ok(info.limitations.length >= 5, '局限说明至少 5 条')
-  ok(info.limitations.some((s: string) => s.includes('数学')), '局限里点名说了数学查不到')
+  ok(info.limitations.some((s: string) => s.includes('无法二值判定')),
+    '局限里说明了「感受/体会」类要求是有意舍弃的，不是遗漏')
+  ok(!info.limitations.some((s: string) => /数学.*未纳入可用/.test(s)),
+    '局限里不再声称数学不可用 —— 它现在有 73 条，说谎比不说更糟')
 
   // ── 3. 检索 ───────────────────────────────────────────────────
   console.log('\n【3】k12_find_capability')
@@ -88,8 +91,13 @@ try {
   ok(all.total === SNAP.counts.anchorsUsable, `不加条件返回全部（${all.total}）`)
   const yuwen = await findCapability.execute({ discipline: '语文' }, EXEC) as any
   ok(yuwen.total > 100, `语文 ${yuwen.total} 条`)
-  const shuxue = await findCapability.execute({ discipline: '数学' }, EXEC) as any
-  ok(shuxue.total === 0, '数学 0 条 —— 诚实的空，不能编')
+  // 这条原本断言「数学 0 条 —— 诚实的空」。数学现在有真覆盖了，断言换成
+  // **每一科的数字都必须和快照对得上** —— 防的还是同一件事：工具不许虚报覆盖。
+  const shuxue = await findCapability.execute({ discipline: '数学', limit: 999 }, EXEC) as any
+  const mathInSnap = SNAP.anchors.filter((a) => a.discipline === '数学').length
+  ok(shuxue.total === mathInSnap, `数学 ${shuxue.total} 条，与快照一致`)
+  const fake = await findCapability.execute({ discipline: '不存在的学科' }, EXEC) as any
+  ok(fake.total === 0, '不存在的学科返回 0 —— 不许编')
   const bei = await findCapability.execute({ query: '背诵' }, EXEC) as any
   ok(bei.total > 100, `关键词「背诵」命中 >100（实际 ${bei.total}）`)
   ok(all.anchors.every((a: any) => a.id && a.statement), '每条都有 id 和 statement')
