@@ -22,6 +22,7 @@ export interface Anchor {
   basis: string[]
   source: string | null
   itemCount: number | null
+  stageTargets: { stage: string; band: string; target: number }[] | null
   reviewStatus: string
   humanConfirmed: boolean
   pendingObjection: boolean

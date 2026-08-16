@@ -74,6 +74,9 @@ const slimAnchors = usable.map((a) => ({
   basis: a.autoConfirmBasis ?? [],
   source: a.provenance?.source ?? a.evidenceSource ?? null,
   itemCount: a.provenance?.itemCount ?? null,
+  // 分学段累计目标量。产品该按孩子所在学段取分母 —— 二年级孩子看到
+  // 「386/3500（11%）」会被吓着，看到「386/1600（第一学段 24%）」才有意义。
+  stageTargets: a.stageTargets ?? null,
   reviewStatus: a.reviewStatus,
   // 人有没有签过字。产品要据此决定显示强度（「已确认」vs「待确认」）
   humanConfirmed: a.reviewStatus === 'expert-confirmed',

@@ -162,6 +162,18 @@ try {
   ok(!p.nextUp[0].items.some((c: string) => ['口','山','巾','入','几'].includes(c)), '下一步不会推荐已掌握的字', p.nextUp[0].items)
   ok(/不支持跨学科学习路径推荐/.test(p.limitation), '明说了做不到跨学科路径推荐 —— 不许含糊')
 
+  // 学段分母：二年级孩子看到 386/3500 会被吓着，看到 386/1600 才有意义
+  const staged = await progress.execute({ learner: 'stu_TEST01', stage: 'G1-2' }, EXEC) as any
+  const jb = staged.byAnchor.find((a: any) => a.anchorId === jiben.id)
+  ok(jb?.total === 800, `给了 G1-2，基本字表分母取第一学段会写目标 800（实际 ${jb?.total}）`, jb)
+  ok(jb?.totalBasis === '第一学段目标', `分母来源标注正确：${jb?.totalBasis}`)
+  const unstaged = await progress.execute({ learner: 'stu_TEST01' }, EXEC) as any
+  const jb2 = unstaged.byAnchor.find((a: any) => a.anchorId === jiben.id)
+  ok(jb2?.total === 299 && jb2?.totalBasis === '清单总量', `不给学段则用清单总量 299（实际 ${jb2?.total}）`)
+  const bad = await progress.execute({ learner: 'stu_TEST01', stage: 'G9-9' }, EXEC) as any
+  const jb3 = bad.byAnchor.find((a: any) => a.anchorId === jiben.id)
+  ok(jb3?.totalBasis === '清单总量', '学段传了不存在的值，退回清单总量而不是崩')
+
   const empty = await progress.execute({ learner: 'stu_NOBODY' }, EXEC) as any
   ok(!empty.hasProfile && empty.totals.hanzi === 0, '无档案时返回空而不是报错')
 

@@ -27,6 +27,12 @@ export function makeLearnerProgress(profileDir: string) {
     parameters: {
       learner: { type: 'string', required: true, description: '学习者代号' },
       suggestNext: { type: 'integer', description: '每条清单锚点建议多少个下一步条目，默认 10，0 表示不建议' },
+      stage: {
+        type: 'string',
+        description:
+          '孩子所在学段 G1-2 / G3-4 / G5-6 / G7-9。给了就按该学段的课标目标算完成度' +
+          '（二年级孩子识字 386 该显示 386/1600，不是 386/3500）。不给则按整个义务教育的总量算',
+      },
     },
     output: {
       schema: {
@@ -56,7 +62,8 @@ export function makeLearnerProgress(profileDir: string) {
                 anchorId: { type: 'string', required: true },
                 statement: { type: 'string', required: true },
                 done: { type: 'integer', required: true },
-                total: { type: 'integer', required: true, description: '0 表示非清单类锚点' },
+                total: { type: 'integer', required: true, description: '分母。给了 stage 就是该学段的课标目标，否则是清单总条数' },
+                totalBasis: { type: 'string', required: true, description: '分母是什么：「第一学段目标」或「清单总量」' },
                 percent: { type: 'integer', required: true },
               },
             },
@@ -88,7 +95,7 @@ export function makeLearnerProgress(profileDir: string) {
         ]
         const rows = value.byAnchor.map((a) =>
           a.total
-            ? `- ${a.statement}　${a.done}/${a.total}（${a.percent}%）`
+            ? `- ${a.statement}　${a.done}/${a.total}（${a.percent}%，分母=${a.totalBasis}）`
             : `- ${a.statement}　已掌握`,
         )
         const next = value.nextUp.length
@@ -142,15 +149,22 @@ export function makeLearnerProgress(profileDir: string) {
       // ── 各锚点完成度 ────────────────────────────────────────
       const done = new Map<string, number>()
       for (const a of p.assertions) done.set(a.anchorId, (done.get(a.anchorId) ?? 0) + 1)
+      const stage = args.stage?.trim()
       const byAnchor = [...done.entries()]
         .map(([id, n]) => {
           const anchor = getAnchor(id)
-          const total = anchor?.itemCount ?? 0
+          // 按学段取分母。课标给了每个学段的累计目标量，用整表总量当分母
+          // 对低学段孩子毫无意义 —— 二年级看到 386/3500 只会觉得自己不行。
+          const hit = stage
+            ? (anchor?.stageTargets ?? []).find((t) => t.stage === stage)
+            : undefined
+          const total = hit ? hit.target : (anchor?.itemCount ?? 0)
           return {
             anchorId: id,
             statement: anchor?.statement ?? '(锚点已不在可用集合)',
             done: n,
             total,
+            totalBasis: hit ? `${hit.band}目标` : '清单总量',
             percent: total ? Math.round((n / total) * 100) : 0,
           }
         })
