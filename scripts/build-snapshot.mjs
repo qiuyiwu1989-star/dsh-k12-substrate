@@ -4,8 +4,13 @@
  * 为什么要快照而不是直接读源仓库：插件装在别人机器上，那台机器没有 taxonomy
  * 的 checkout。快照随包发布，离线可用。
  *
- * 导哪些档见下方 USABLE 的注释。ai-reviewed / disputed 一律不导 —— 让模型
- * 拿没验过的锚点给孩子下结论，就是把没验过的东西当验过的用。
+ * 导哪些档由**底座的 mappings/citable.json 决定**，这里不写第二遍。
+ * disputed / llm-proposed 一律不导 —— 让模型拿没验过的锚点给孩子下结论，
+ * 就是把没验过的东西当验过的用。
+ *
+ * 2026-08-20 底座把 ai-reviewed 纳入可引用（户主明示「都改成不需要签字 先上」），
+ * 快照随之从 388 涨到一千多条。**注意它仍然不是教师签字** ——
+ * 每条锚点的 reviewStatus 原样透传，消费方自己能看出成色。
  *
  *   node scripts/build-snapshot.mjs [taxonomy 仓库路径]
  */
@@ -26,7 +31,19 @@ const OUT = join(HERE, '..', 'data')
  * 透传到工具返回值里，否则「有异议再改」无从提起 —— 使用者根本不知道
  * 哪些是待异议的。
  */
-const USABLE = new Set(['auto-confirmed', 'expert-confirmed', 'ai-adjudicated'])
+// **2026-08-20：改成从底座现读，不在这里写第二遍。**
+// 底座那边的 mappings/citable.json 是唯一真相；这里原先硬写一份，
+// 结果底座把 ai-reviewed 纳入可引用之后，插件还在按旧线导 —— 快照悄悄失真。
+// 读不到就报错退出，**不许回落到硬编码的旧值**：一回落就又是两份定义。
+const CITABLE_JSON = join(SRC, 'mappings', 'citable.json')
+let USABLE
+try {
+  USABLE = new Set(JSON.parse(readFileSync(CITABLE_JSON, 'utf8')).citable)
+} catch (e) {
+  console.error(`✗ 读不到 ${CITABLE_JSON} —— 可引用档位的定义在底座仓库里，`
+    + `这里不保留副本。请确认 taxonomy 路径：node scripts/build-snapshot.mjs <path>`)
+  process.exit(1)
+}
 
 function walk(dir) {
   const out = []
@@ -80,7 +97,12 @@ const slimAnchors = usable.map((a) => ({
   reviewStatus: a.reviewStatus,
   // 人有没有签过字。产品要据此决定显示强度（「已确认」vs「待确认」）
   humanConfirmed: a.reviewStatus === 'expert-confirmed',
-  pendingObjection: a.reviewStatus === 'ai-adjudicated',
+  // 「AI 判过、没有人签字」。2026-08-20 起 ai-reviewed 也进可引用集合，
+  // 它和 ai-adjudicated 一样属于这一类 —— 产品要据此显示「待确认」而不是「已确认」。
+  pendingObjection: a.reviewStatus === 'ai-adjudicated' || a.reviewStatus === 'ai-reviewed',
+  // 字段级缺陷（证据弱 / 学段存疑）。**与 reviewStatus 分开**：
+  // 断言成立不等于每个字段都好，消费方该看得见这个区别。
+  fieldIssues: a.fieldIssues ?? [],
 }))
 
 // ── 清单条目：这是体量大头，字段压到最小 ──────────────────────────
@@ -95,13 +117,25 @@ const slimLists = lists.map((x) => ({
   m: x.meta ?? null,
 }))
 
-// ── 边：只留两端都可用的。目前就是那 2 条实测集合包含边。 ─────────
+// ── 边：只留两端都可用、且**在推理图内**的。 ────────────────────────
+//
+// 2026-08-20 边完成语义重标（specs/001）。convention 边是「教材就这么排的、
+// 无可观测影响」，它不该参与任何推理 —— 插件拿它算「下一步学什么」会得出
+// 没有依据的建议。所以这里直接不导。
 const slimEdges = edges
   .filter((e) => usableIds.has(e.anchorId) && usableIds.has(e.prerequisiteId))
+  .filter((e) => e.type !== 'convention' && e.inInferenceGraph !== false)
   .map((e) => ({
     to: e.anchorId,
     from: e.prerequisiteId,
     strength: e.strength,
+    // 四类语义：component 子动作 / instrument 手段可绕 / semantic 概念前提。
+    // 「可不可以绕过」直接决定产品该不该拦人 —— 没有它，所有边长得一样。
+    type: e.type ?? null,
+    // 不具备前置时的**具体可观察失败表现**。这是这条边的判据本身，
+    // 也是给家长解释「为什么先学这个」时唯一拿得出手的东西。
+    failureSignature: e.failureSignature ?? null,
+    strengthCappedBy: e.strengthCappedBy ?? null,
     reason: e.reason,
     reviewStatus: e.reviewStatus,
     containment: e.containment ?? null,

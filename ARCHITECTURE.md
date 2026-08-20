@@ -55,7 +55,7 @@ scripts/build-snapshot.mjs
 │  1. 候选锚点抽取（4,841 条）          │
 │  2. 可判定性筛选（1,958 条）          │
 │  3. AI 复审（1,219 条）              │
-│  4. 人工抽检（765 条可用）            │
+│  4. 复核分档（可用数见 manifest）      │
 └─────────────────────────────────────┘
     ↓
 data/substrate.json（1.2MB）
@@ -99,7 +99,7 @@ interface Snapshot {
   sourceRepo: string
   standard: string
   counts: {
-    anchorsUsable: number      // 765
+    anchorsUsable: number      // 现读快照，别在文档里硬写数字
     anchorsPendingObjection: number
     anchorsTotal: number
     listItems: number          // 6,091

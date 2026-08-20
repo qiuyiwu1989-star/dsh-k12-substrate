@@ -58,6 +58,11 @@ export const substrateInfo = defineTool({
 
   async execute() {
     const snap = load()
+    // 学科厚薄现算 —— 硬写的数字半年后一定是假的。
+    // 这一句原本写着「义务教育 14 科均已覆盖」，而底座早就覆盖到高中 24 科了。
+    const _c: Record<string, number> = {}
+    for (const a of snap.anchors) _c[a.discipline] = (_c[a.discipline] ?? 0) + 1
+    const byDisc = Object.entries(_c).sort((x, y) => y[1] - x[1])
     return {
       standard: snap.standard,
       sourceRepo: snap.sourceRepo,
@@ -70,11 +75,26 @@ export const substrateInfo = defineTool({
       disciplines: [...new Set(snap.anchors.map((a) => a.discipline))],
       lists: snap.listMeta.map((m) => ({ id: m.id, kind: m.kind ?? '', count: m.count })),
       limitations: [
-        `全库从课标抽出 ${snap.counts.anchorsTotal} 条候选锚点，仅 ${snap.counts.anchorsUsable} 条通过「判定客观、无需教师复核」的门槛并对外开放。`,
-        '开放的锚点集中在语文识字/写字/背诵与英语词汇——这些能力的对错是客观的（字写对没有、篇背下来没有）。',
-        '义务教育 14 科均已覆盖，但深浅差别很大：语文/科学/数学较厚，地理/劳动较薄。查不到某条具体要求不代表课标没写，只代表它没能改写成有标准答案的可判定断言。',
+        `全库从课标抽出 ${snap.counts.anchorsTotal} 条候选锚点，${snap.counts.anchorsUsable} 条对外开放。`,
+        // **2026-08-20 改。** 原文说这些是「判定客观、无需教师复核」的 ——
+        // 那个说法只对其中一小部分（字表词表那类数得清的）成立。
+        // 底座把可引用线放宽到 ai-reviewed 之后，绝大多数是「AI 看过、没挑出毛病」，
+        // **那不是判定客观，更不是教师签字**。说清楚成色是这个工具存在的理由。
+        `其中 ${snap.counts.anchorsPendingObjection} 条是 AI 判过但**没有任何人签过字**的（pendingObjection=true），`
+          + '引用时必须向用户说明。教师签字数目前是 0。',
+        '「判定客观、无需人看」的只有字表/词表/背诵篇目那一类——字写对没有、篇背下来没有，数得清。',
+        `覆盖 ${byDisc.length} 科（含高中），深浅差别很大：`
+          + `最厚 ${byDisc.slice(0, 3).map(([d, n]) => `${d} ${n}`).join('、')}；`
+          + `最薄 ${byDisc.slice(-3).map(([d, n]) => `${d} ${n}`).join('、')}。`
+          + '查不到某条具体要求不代表课标没写，只代表它没能改写成有标准答案的可判定断言。',
         '课标里大量要求是「感受/体会/认同」这类，本质上无法二值判定，已在抽取阶段整批舍弃 —— 这是有意的，不是遗漏。',
-        `可用锚点之间只有 ${snap.counts.edges} 条依赖边，且均来自实测集合包含关系，不是学习路径。本底座目前不能回答「先学什么后学什么」。`,
+        // **2026-08-20 改。** 原文说「只有 N 条依赖边，且均来自实测集合包含关系」——
+        // 底座完成了边的语义重标（specs/001），现在每条边带类型和「不具备时的
+        // 具体失败表现」，不再只有集合包含。但**没有一条经过人复核**。
+        `可用锚点之间有 ${snap.counts.edges} 条依赖边，每条带类型（子动作／手段可绕／概念前提）`
+          + '和不具备时的具体失败表现，可以用来向用户解释「为什么得先学这个」。',
+        '但这些边**全部是模型提议、无人复核**，所以本底座仍然不自动排学习路径——'
+          + '拿没人看过的边给一个具体孩子排顺序，就是把没验过的东西当验过的用。',
         '教材层（哪一课出现哪个知识点）因版权原因不在本数据内。',
         '学习者档案为本机数据，不随插件分发，也不上传。',
       ],

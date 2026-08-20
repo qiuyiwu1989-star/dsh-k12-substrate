@@ -26,6 +26,14 @@ export interface Anchor {
   reviewStatus: string
   humanConfirmed: boolean
   pendingObjection: boolean
+  /**
+   * 字段级缺陷，**与 reviewStatus 分开**。断言成立不等于每个字段都好：
+   *   evidence-weak              掌握证据写得弱
+   *   stage                      学段可能标错
+   *   independent-check-suspect  独立路径验证没抽出这条（底座那边只标记不降级）
+   * 产品要显示它 —— 「可引用」不等于「每个字段都可靠」。
+   */
+  fieldIssues: string[]
 }
 
 /** 清单条目。字段名压过，见 scripts/build-snapshot.mjs */
@@ -52,6 +60,24 @@ export interface Edge {
   to: string
   from: string
   strength: string
+  /**
+   * 先修关系的四类语义（底座 specs/001，2026-08-20 起有值）。
+   * 快照里**不含 convention** —— 那类是「教材就这么排的、无可观测影响」，
+   * 拿它算「下一步学什么」会给出没有依据的建议，所以在导出时就滤掉了。
+   *
+   *   component  前置是后继的子动作，不可绕过
+   *   instrument 拿前置当手段，**可以绕过**，只是绕远路
+   *   semantic   不懂前置则后继的表述本身没有意义，不可绕过
+   */
+  type: 'component' | 'instrument' | 'semantic' | null
+  /**
+   * 不具备前置时的**具体可观察失败表现**。
+   * 这是这条边的判据本身，也是给家长解释「为什么要先学这个」时
+   * 唯一拿得出手的东西 —— 比「因为它是前置」有用得多。
+   */
+  failureSignature: string | null
+  /** 强度被设计规则压回 soft 的原因（MATRIX 档学科不许标 hard）。 */
+  strengthCappedBy: string | null
   reason: string
   reviewStatus: string
   containment: unknown

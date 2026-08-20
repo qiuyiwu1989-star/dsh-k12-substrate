@@ -5,7 +5,7 @@
  * （凭什么不用等老师复核）。模型被追问「你怎么知道」时要能答出来。
  */
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { load, inStage, type Anchor } from '../data.ts'
+import { load, index, getAnchor, inStage, type Anchor } from '../data.ts'
 
 // 描述里的数字必须从快照读。写死过一次「143 条」，加了 3 条锚点之后
 // 工具描述就开始对模型说谎了 —— 而模型会照着它回答用户。
@@ -30,7 +30,26 @@ const anchorNode = {
     evidence: { type: 'array', required: true, items: { type: 'string' }, description: '判定为「会」的具体表现' },
     basis: { type: 'array', required: true, items: { type: 'string' }, description: '这条为什么不需要教师复核就可用' },
     itemCount: { type: 'integer', required: true, description: '清单类锚点下挂多少条目；非清单类为 0' },
-    pendingObjection: { type: 'boolean', required: true, description: 'true = AI 裁定、尚无人签字，引用时应向用户说明' },
+    pendingObjection: { type: 'boolean', required: true, description: 'true = AI 裁定或 AI 复核、尚无人签字，引用时应向用户说明' },
+    fieldIssues: { type: 'array', required: true, items: { type: 'string' }, description: '字段级缺陷（证据弱 / 学段存疑 / 独立验证没抽出这条）。**可引用不等于每个字段都可靠**，引用时该一并说明' },
+    prerequisites: {
+      type: 'array', required: true,
+      description: '直接前置。每条带 type（component 子动作 / instrument 手段可绕 / semantic 概念前提）'
+        + '和 failureSignature（不具备时的具体可观察失败表现）——'
+        + '**要跟用户解释「为什么得先学这个」，用 failureSignature，别用「因为它是前置」**。',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          id: { type: 'string', required: true },
+          statement: { type: 'string', required: true },
+          type: { type: 'string', required: true, description: 'component | instrument | semantic' },
+          strength: { type: 'string', required: true, description: 'hard = 不具备就卡死；soft = 能到但更慢' },
+          canBypass: { type: 'boolean', required: true, description: 'true = instrument，换个办法也能到' },
+          failureSignature: { type: 'string', required: true, description: '不具备这条前置时的具体可观察失败表现' },
+        },
+      },
+    },
   },
 } as const
 
@@ -48,6 +67,19 @@ function project(a: Anchor) {
     basis: a.basis,
     itemCount: a.itemCount ?? 0,
     pendingObjection: !!a.pendingObjection,
+    fieldIssues: a.fieldIssues ?? [],
+    // 前置带上语义与失败表现（底座 specs/001，2026-08-20 起有值）。
+    // 快照里已经滤掉了 convention 边，所以这里出现的每一条都是有可观测后果的。
+    prerequisites: (index().prereqs.get(a.id) ?? []).map((e) => ({
+      id: e.from,
+      statement: getAnchor(e.from)?.statement ?? '',
+      // 空串而不是 null —— 工具返回值的字段声明是 string，
+      // 而 null 会让消费方多写一个分支。没有值就是没有值，空串已经说清楚了。
+      type: e.type ?? '',
+      strength: e.strength,
+      canBypass: e.type === 'instrument',
+      failureSignature: e.failureSignature ?? '',
+    })),
   }
 }
 
