@@ -1,0 +1,17 @@
+# K12 辅导员 preset
+# 基于 dsh-k12-substrate 的教育辅导 agent
+#
+# 安装方式：
+#   pnpm add dsh-k12-substrate
+#   pnpm dsh web --patch ./node_modules/dsh-k12-substrate/cordis.patch.yml --preset examples/presets/k12-tutor
+#
+# 或者复制到你的 agent-presets 目录：
+#   cp -r examples/presets/k12-tutor ~/.dsh/.agent-presets/k12-tutor
+
+- id: k12-substrate
+  name: dsh-k12-substrate
+  config:
+    # 学习者档案目录。留空则用 ~/.dsh-k12-substrate/profiles/
+    profileDir: ''
+    # 设为 true 则只查询，不记录掌握情况
+    readOnly: false
