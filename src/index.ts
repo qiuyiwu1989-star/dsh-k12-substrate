@@ -9,9 +9,10 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { defaultProfileDir } from './profile.ts'
-import { findCapability } from './tools/find-capability.ts'
+import { findCapability, makeFindCapability } from './tools/find-capability.ts'
 import { lookupItem } from './tools/lookup-item.ts'
-import { substrateInfo } from './tools/substrate-info.ts'
+import { substrateInfo, makeSubstrateInfo } from './tools/substrate-info.ts'
+import { makeMcpBridge } from './mcp.ts'
 import { makeRecordMastery } from './tools/record-mastery.ts'
 import { makeLearnerProgress } from './tools/learner-progress.ts'
 
@@ -23,13 +24,22 @@ export interface Config {
   profileDir?: string
   /** 关掉档案读写，只留查询工具。给不需要记录学情的场景用 */
   readOnly?: boolean
+  /**
+   * 底座 MCP server 在宿主里的 serverName（即 @deepseek-ai/dsh-mcp-client 那一行的
+   * config.serverName）。默认 'k12'；设为空串则关掉 MCP 路由，全部走随包快照。
+   * 宿主里没挂这个 server 时自动退回快照，并在返回值里说明。
+   */
+  mcpServerName?: string
 }
 
 export function apply(ctx: Context, config: Config = {}): void {
   const profileDir = config.profileDir?.trim() || defaultProfileDir()
+  // 检索经宿主的 MCP 桥去调底座 MCP server（见 src/mcp.ts）。
+  // 桥只在工具执行时按名字找 mcp__<server>__*，所以和 MCP 那一行谁先激活无关。
+  const mcp = makeMcpBridge(ctx.tools, config.mcpServerName ?? 'k12')
 
-  ctx.tools.register(substrateInfo)
-  ctx.tools.register(findCapability)
+  ctx.tools.register(makeSubstrateInfo(mcp))
+  ctx.tools.register(makeFindCapability(mcp))
   ctx.tools.register(lookupItem)
 
   if (!config.readOnly) {
@@ -38,6 +48,10 @@ export function apply(ctx: Context, config: Config = {}): void {
   }
 }
 
-export { findCapability, lookupItem, substrateInfo, makeRecordMastery, makeLearnerProgress }
+export {
+  findCapability, makeFindCapability, lookupItem, substrateInfo, makeSubstrateInfo,
+  makeRecordMastery, makeLearnerProgress,
+}
+export { makeMcpBridge, parseMcpValue, type McpBridge, type Route } from './mcp.ts'
 export * from './data.ts'
 export * as profile from './profile.ts'

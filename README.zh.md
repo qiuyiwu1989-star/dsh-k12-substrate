@@ -62,6 +62,20 @@ pnpm dsh web --patch ./node_modules/dsh-k12-substrate/cordis.patch.yml
 
 后两个可以用 `readOnly: true` 关掉。
 
+### 检索可以经底座的 MCP server
+
+宿主里挂了底座的 MCP server（官方桥 `@deepseek-ai/dsh-mcp-client`，`serverName: k12`）时，
+`k12_find_capability` 带 `query` 的检索改经它走：用底座现行数据和底座自己的检索算法，
+每条带粒度警告，那一次命中也会进底座的使用计数（只记锚点 ID 与次数）。没挂就退回随包快照。
+走了哪条路写在返回值的 `route` 字段和结果第一行里，不静默回落。
+
+```bash
+K12_TAXONOMY_ROOT=/path/to/os-k12-taxonomy \
+  dsh web --patch ./examples/mcp/cordis.patch.yml --patch ./cordis.patch.yml
+```
+
+哪些走、哪些不走、计数的规矩，见 [docs/mcp.md](docs/mcp.md)。
+
 ## 用起来什么样
 
 ```

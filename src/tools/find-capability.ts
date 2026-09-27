@@ -6,6 +6,7 @@
  */
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { load, index, getAnchor, inStage, type Anchor } from '../data.ts'
+import { makeMcpBridge, type McpBridge, type Route } from '../mcp.ts'
 
 // 描述里的数字必须从快照读。写死过一次「143 条」，加了 3 条锚点之后
 // 工具描述就开始对模型说谎了 —— 而模型会照着它回答用户。
@@ -32,6 +33,8 @@ const anchorNode = {
     itemCount: { type: 'integer', required: true, description: '清单类锚点下挂多少条目；非清单类为 0' },
     pendingObjection: { type: 'boolean', required: true, description: 'true = AI 裁定或 AI 复核、尚无人签字，引用时应向用户说明' },
     fieldIssues: { type: 'array', required: true, items: { type: 'string' }, description: '字段级缺陷（证据弱 / 学段存疑 / 独立验证没抽出这条）。**可引用不等于每个字段都可靠**，引用时该一并说明' },
+    grainWarning: { type: 'string', description: '粒度警告（只有经底座 MCP 检索时才有）。这条覆盖几个年级 —— 映射「成功」不等于信息量够，照它说的办' },
+    why: { type: 'array', items: { type: 'string' }, description: '为什么被检索到（只有经底座 MCP 检索时才有）：字面命中了哪些词、学段是否吻合' },
     prerequisites: {
       type: 'array', required: true,
       description: '直接前置。每条带 type（component 子动作 / instrument 手段可绕 / semantic 概念前提）'
@@ -83,74 +86,172 @@ function project(a: Anchor) {
   }
 }
 
-export const findCapability = defineTool({
-  name: 'k12_find_capability',
-  description:
-    '检索中国 K12 能力锚点（源自教育部《义务教育课程标准（2022年版）》）。' +
-    `库中 ${N} 条可用锚点，其中 ${P} 条标注为「AI 裁定·待异议」——` +
-    '那些是 AI 带课标原文裁定的，尚无教师签字。向用户陈述这类锚点时应说明这一点。' +
-    '数学、物理等学科的锚点仍未开放，此工具查不到——查不到不等于课标里没有。',
-  parameters: {
-    query: { type: 'string', description: '关键词，匹配能力断言与对象。留空则返回全部（受 limit 限制）' },
-    discipline: { type: 'string', description: '学科，如「语文」「英语」' },
-    stage: { type: 'string', description: '学段 G1–G9，返回该学段适用的锚点' },
-    limit: { type: 'integer', description: `返回上限，默认 20，最大 ${N}` },
+const routeNode = {
+  type: 'object',
+  required: true,
+  additionalProperties: false,
+  description: '这次结果走的哪条路。via=mcp：经底座 MCP server，用底座现行数据与底座的检索算法；'
+    + 'via=snapshot：用随包快照（可能落后于底座），note 说明为什么没走 MCP',
+  properties: {
+    via: { type: 'string', required: true, description: 'mcp | snapshot' },
+    tool: { type: 'string', required: true, description: '走 MCP 时调的工具全名；走快照为空串' },
+    dataVersion: { type: 'string', required: true, description: '数据版本' },
+    note: { type: 'string', required: true, description: '为什么走这条路 / 这条路的局限' },
   },
-  output: {
-    schema: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        total: { type: 'integer', required: true, description: '匹配总数（可能大于返回数）' },
-        returned: { type: 'integer', required: true },
-        anchors: { type: 'array', required: true, items: anchorNode },
+} as const
+
+function snapshotVersion(): string {
+  const s = load()
+  return s.sourceVersion ? `快照 v${s.sourceVersion}` : `快照 @${s.sourceCommit ?? '?'}`
+}
+
+/** 快照上的检索：字面包含。MCP 不可用、或纯列举（无关键词）时走这里 */
+function searchSnapshot(args: { query?: string; discipline?: string; stage?: string }, limit: number) {
+  const snap = load()
+  const q = args.query?.trim()
+  let hits = snap.anchors
+  if (args.discipline) {
+    const d = args.discipline.trim()
+    hits = hits.filter((a) => a.discipline === d)
+  }
+  if (args.stage) {
+    const s = args.stage.trim().toUpperCase()
+    hits = hits.filter((a) => inStage(a, s))
+  }
+  if (q) {
+    hits = hits.filter((a) => a.statement.includes(q) || a.object.includes(q) || (a.strand ?? '').includes(q))
+  }
+  return { total: hits.length, anchors: hits.slice(0, limit).map(project) }
+}
+
+interface McpCandidate { id?: unknown; grain?: { warning?: unknown }; why?: unknown }
+
+/**
+ * @param mcp 底座 MCP 的桥。不给（或 serverName 为空）就只走快照 ——
+ *            自测用的就是这个形态，所以自测永远碰不到底座的计数器。
+ */
+export function makeFindCapability(mcp: McpBridge = makeMcpBridge(undefined, '')) {
+  return defineTool({
+    name: 'k12_find_capability',
+    description:
+      '检索中国 K12 能力锚点（源自教育部课程标准）。' +
+      `可用锚点 ${N} 条，其中 ${P} 条是 AI 判过、无人签字的（pendingObjection）——` +
+      '向用户陈述这类锚点时应说明这一点。查不到不等于课标里没有。' +
+      '给了 query 时优先经底座 MCP server 检索（底座现行数据 + 底座自己的检索算法，每条带粒度警告）；' +
+      'MCP 不可用时退回随包快照做字面匹配。返回值的 route 字段说明这次走的哪条路，引用前看一眼。',
+    parameters: {
+      query: { type: 'string', description: '检索文本（关键词或一段教学内容）。留空则按学科/学段列举（只走快照）' },
+      discipline: { type: 'string', description: '学科，如「语文」「英语」。经 MCP 检索时强烈建议给，不给会跨科召回' },
+      stage: { type: 'string', description: '年级 G1–G12，返回该年级适用的锚点' },
+      limit: { type: 'integer', description: `返回上限，默认 20，最大 ${N}` },
+    },
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          total: { type: 'integer', required: true, description: '匹配总数（可能大于返回数）。经 MCP 检索时底座只给前 N 条候选，total 等于返回数' },
+          returned: { type: 'integer', required: true },
+          anchors: { type: 'array', required: true, items: anchorNode },
+          route: routeNode,
+        },
+      },
+      render: (_args, value) => {
+        const r = value.route
+        const head = r.via === 'mcp'
+          ? `［经底座 MCP · ${r.dataVersion}］${r.note}`
+          : `［走随包快照 · ${r.dataVersion}］${r.note}`
+        if (value.returned === 0) {
+          return [{ type: 'text', text: `${head}\n没有匹配的锚点。查不到不等于课标里没有。` }]
+        }
+        const lines = value.anchors.map((a) => {
+          const stage = a.stageMin ? ` [${a.stageMin}–${a.stageMax}]` : ''
+          const n = a.itemCount ? `　${a.itemCount} 条` : ''
+          const p = a.pendingObjection ? '　[AI判过·无人签字]' : ''
+          const g = a.grainWarning ? `\n    粒度：${a.grainWarning}` : ''
+          return `- ${a.id}${stage} ${a.discipline}｜${a.statement}${n}${p}${g}`
+        })
+        const more = value.total > value.returned ? `\n（共 ${value.total} 条匹配，已显示 ${value.returned} 条）` : ''
+        return [{ type: 'text', text: `${head}\n${lines.join('\n')}${more}` }]
       },
     },
-    render: (_args, value) => {
-      if (value.returned === 0) {
-        return [{ type: 'text', text: `没有匹配的锚点。库中仅 ${N} 条可用锚点，集中在语文识字/背诵与英语词汇。` }]
+    presentCall: (args) => {
+      const bits = [args.discipline, args.stage, args.query].filter(Boolean)
+      return {
+        card: 'generic',
+        title: bits.length ? `检索能力锚点：${bits.join(' · ')}` : '列出全部可用能力锚点',
+        kind: 'search',
       }
-      const lines = value.anchors.map((a) => {
-        const stage = a.stageMin ? ` [${a.stageMin}–${a.stageMax}]` : ''
-        const n = a.itemCount ? `　${a.itemCount} 条` : ''
-        const p = a.pendingObjection ? '　[AI裁定·待异议]' : ''
-        return `- ${a.id}${stage} ${a.discipline}｜${a.statement}${n}${p}`
-      })
-      const more = value.total > value.returned ? `\n（共 ${value.total} 条匹配，已显示 ${value.returned} 条）` : ''
-      return [{ type: 'text', text: lines.join('\n') + more }]
     },
-  },
-  presentCall: (args) => {
-    const bits = [args.discipline, args.stage, args.query].filter(Boolean)
-    return {
-      card: 'generic',
-      title: bits.length ? `检索能力锚点：${bits.join(' · ')}` : '列出全部可用能力锚点',
-      kind: 'search',
-    }
-  },
+    // 完成后的卡片标题带上走的哪条路 —— 界面上一眼看得出这次有没有经过底座。
+    // 从渲染文本的抬头读，而不是另存状态：回放时只有 content，这样回放也能重现。
+    presentResult: (_args, result) => {
+      const text = result.content.map((b) => (b.type === 'text' ? b.text : '')).join('')
+      const via = text.startsWith('［经底座 MCP') ? '经底座 MCP'
+        : text.startsWith('［走随包快照') ? '走随包快照' : ''
+      return via ? { card: 'generic', title: `检索能力锚点（${via}）` } : { card: 'generic' }
+    },
 
-  async execute(args) {
-    const snap = load()
-    const q = args.query?.trim()
-    const limit = Math.min(Math.max(args.limit ?? 20, 1), N)
+    async execute(args, exec) {
+      const limit = Math.min(Math.max(args.limit ?? 20, 1), N)
+      const q = args.query?.trim()
 
-    let hits = snap.anchors
-    if (args.discipline) {
-      const d = args.discipline.trim()
-      hits = hits.filter((a) => a.discipline === d)
-    }
-    if (args.stage) {
-      const s = args.stage.trim().toUpperCase()
-      hits = hits.filter((a) => inStage(a, s))
-    }
-    if (q) {
-      hits = hits.filter((a) => a.statement.includes(q) || a.object.includes(q) || (a.strand ?? '').includes(q))
-    }
+      // 纯列举：底座 MCP 的 search_anchors 必须有检索文本，没有等价工具。
+      if (!q) {
+        const r = searchSnapshot(args, limit)
+        const route: Route = {
+          via: 'snapshot', tool: '', dataVersion: snapshotVersion(),
+          note: '没给 query，按学科/学段列举：底座 MCP 没有等价的列举工具，只能走快照',
+        }
+        return { total: r.total, returned: r.anchors.length, anchors: r.anchors, route }
+      }
 
-    return {
-      total: hits.length,
-      returned: Math.min(hits.length, limit),
-      anchors: hits.slice(0, limit).map(project),
-    }
-  },
-})
+      // 有检索文本：优先经底座 MCP。**这一次子调用就是取数据的那一步**，
+      // 不是为了让计数器动而额外发的。
+      const m = await mcp.call(exec, 'search_anchors', {
+        text: q,
+        ...(args.discipline ? { discipline: args.discipline.trim() } : {}),
+        ...(args.stage ? { stage: args.stage.trim().toUpperCase() } : {}),
+        limit,
+        // 只要可被档案引用的 —— 和快照的「可用」是同一份定义（底座 mappings/citable.json）
+        citableOnly: true,
+      })
+      if (m.ok && Array.isArray(m.data.candidates)) {
+        const anchors: ReturnType<typeof project>[] = []
+        const missing: string[] = []
+        for (const c of m.data.candidates as McpCandidate[]) {
+          const id = typeof c.id === 'string' ? c.id : ''
+          const a = id ? getAnchor(id) : undefined
+          // 底座比快照新时会出现快照里没有的 ID。不编它的字段，如实报数。
+          if (!a) { if (id) missing.push(id); continue }
+          const w = c.grain?.warning
+          anchors.push({
+            ...project(a),
+            ...(typeof w === 'string' && w ? { grainWarning: w } : {}),
+            ...(Array.isArray(c.why) ? { why: c.why.filter((x): x is string => typeof x === 'string') } : {}),
+          })
+        }
+        const version = typeof m.data.version === 'string' ? `底座 v${m.data.version}` : '底座现行版本'
+        const ranking = typeof m.data.ranking === 'string' ? m.data.ranking : ''
+        const notes = [
+          '底座检索算法（tools/mapper.py），只给前 N 条候选',
+          ranking,
+          missing.length ? `另有 ${missing.length} 条候选不在随包快照里（快照落后于底座），未列出` : '',
+        ].filter(Boolean)
+        const route: Route = { via: 'mcp', tool: m.tool, dataVersion: version, note: notes.join('；') }
+        return { total: anchors.length, returned: anchors.length, anchors, route }
+      }
+
+      const why = m.ok ? `${m.tool} 返回里没有 candidates` : m.reason
+      const r = searchSnapshot(args, limit)
+      const route: Route = {
+        via: 'snapshot', tool: '', dataVersion: snapshotVersion(),
+        note: `未经底座 MCP（${why}）；退回快照字面匹配，结果可能落后于底座，也不进底座的使用计数`,
+      }
+      return { total: r.total, returned: r.anchors.length, anchors: r.anchors, route }
+    },
+  })
+}
+
+/** 只走快照的版本。给不挂宿主的调用方（自测、直接 import）用 */
+export const findCapability = makeFindCapability()

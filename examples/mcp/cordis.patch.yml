@@ -1,0 +1,22 @@
+# 把底座的 MCP server 挂进宿主。挂上之后：
+#   · k12_find_capability 带 query 的检索经它走（底座现行数据 + 底座的检索算法），
+#     那一次命中会进底座的使用计数（os-k12-taxonomy/var/usage.json，只记锚点 ID 与次数）；
+#   · 模型也直接看得见 mcp__k12__search_anchors / get_anchor / get_prerequisites / list_slice。
+# 不挂也能用：插件自动退回随包快照，并在返回值的 route 字段里说明。
+#
+# 需要本机有一份 os-k12-taxonomy 的 checkout 和 python3（search_anchors 会调 tools/mapper.py）。
+#
+#   K12_TAXONOMY_ROOT=/path/to/os-k12-taxonomy \
+#     dsh web --patch ./examples/mcp/cordis.patch.yml --patch ./cordis.patch.yml
+#
+# serverName 要和插件配置里的 mcpServerName 一致（插件默认 k12）。
+# 不要在这里设 K12_USAGE=0 —— 那是底座自测用来关计数的，真实使用就该被计数。
+- insert:
+    - id: k12-substrate-mcp
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: k12
+        transport: stdio
+        command: node
+        args:
+          - !!js "`${process.env.K12_TAXONOMY_ROOT}/mcp/server.mjs`"

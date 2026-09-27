@@ -9,3 +9,6 @@
         profileDir: ''
         # 设为 true 则只注册查询工具，不注册档案读写
         readOnly: false
+        # 底座 MCP server 在宿主里的 serverName（见 examples/mcp/cordis.patch.yml）。
+        # 挂着就经它检索、进底座的使用计数；没挂自动退回随包快照。空串 = 关掉 MCP 路由
+        mcpServerName: k12

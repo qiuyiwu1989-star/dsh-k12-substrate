@@ -9,9 +9,10 @@
 import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { findCapability } from '../src/tools/find-capability.ts'
+import { findCapability, makeFindCapability } from '../src/tools/find-capability.ts'
 import { lookupItem } from '../src/tools/lookup-item.ts'
-import { substrateInfo } from '../src/tools/substrate-info.ts'
+import { substrateInfo, makeSubstrateInfo } from '../src/tools/substrate-info.ts'
+import { makeMcpBridge, type ToolsLike } from '../src/mcp.ts'
 import { makeRecordMastery } from '../src/tools/record-mastery.ts'
 import { makeLearnerProgress } from '../src/tools/learner-progress.ts'
 import { load } from '../src/data.ts'
@@ -204,6 +205,95 @@ try {
   // 展示器必须是纯函数：同样入参必须同样输出（回放时要能重现）
   const twice = (lookupItem as any).presentCall({ item: '口' })
   ok(JSON.stringify(lc) === JSON.stringify(twice), 'presentCall 是纯函数（两次调用结果相同）')
+
+  // ── 6c. 经底座 MCP 的检索路由 ─────────────────────────────────
+  // 这里一律用假的 ctx.tools，**绝不起真的底座 MCP server**：
+  // 底座的计数器只该记真实使用，自测污染过一次（读数 112、真实调用 0）。
+  console.log('\n【6c】检索路由：MCP 优先，快照兜底')
+  const bare = await findCapability.execute({ query: '背诵', limit: 3 }, EXEC) as any
+  ok(bare.route.via === 'snapshot' && /mcpServerName 为空/.test(bare.route.note),
+    '不挂宿主的默认实例只走快照，并说明原因', bare.route)
+  ok(/^快照 v\d/.test(bare.route.dataVersion), `快照路径报出快照版本：${bare.route.dataVersion}`)
+
+  type Call = { name: string; arguments: any; parent?: unknown; callId: unknown }
+  function fakeTools(opts: { has: boolean; reply?: (c: Call) => any }) {
+    const calls: Call[] = []
+    const tools: ToolsLike = {
+      get: (name) => (opts.has && name.startsWith('mcp__k12__') ? {} : undefined),
+      execute: async (input) => {
+        calls.push(input as Call)
+        return opts.reply ? opts.reply(input as Call) : { isError: true, error: { message: '没有回复' } }
+      },
+    }
+    return { tools, calls }
+  }
+  const TOKEN = Symbol('exec-token')
+  const EXEC2 = { signal: new AbortController().signal, callId: 'call_1', rootCallId: 'call_1', token: TOKEN } as never
+  const [id1, id2] = [SNAP.anchors[0]!.id, SNAP.anchors[1]!.id]
+  const textBlock = (o: unknown) => ({ isError: false, value: { content: [{ type: 'text', text: JSON.stringify(o) }] } })
+
+  // 挂着 MCP、返回正常
+  const up = fakeTools({ has: true, reply: () => textBlock({
+    version: '1.4', ranking: '⚠️ 只有字面粗召回，排序不可信',
+    candidates: [
+      { id: id1, grain: { warning: '覆盖 3 个年级' }, why: ['字面命中「汉字」'] },
+      { id: 'ca_NEWER_THAN_SNAPSHOT' },
+      { id: id2 },
+    ],
+  }) })
+  const viaMcp = await makeFindCapability(makeMcpBridge(up.tools, 'k12'))
+    .execute({ query: '汉字', discipline: '语文', stage: 'g2', limit: 5 }, EXEC2) as any
+  ok(viaMcp.route.via === 'mcp' && viaMcp.route.tool === 'mcp__k12__search_anchors', '挂着 MCP 时经 MCP 检索', viaMcp.route)
+  ok(viaMcp.route.dataVersion === '底座 v1.4', `报出底座现行版本：${viaMcp.route.dataVersion}`)
+  ok(up.calls.length === 1, `一次检索只发一次子调用（实际 ${up.calls.length}）—— 不许为计数多调`)
+  const c0 = up.calls[0]!
+  ok(c0.arguments.text === '汉字' && c0.arguments.citableOnly === true && c0.arguments.discipline === '语文'
+    && c0.arguments.stage === 'G2' && c0.arguments.limit === 5, 'MCP 参数：原文、只要可引用、学科、年级、条数', c0.arguments)
+  ok(c0.parent === TOKEN, '子调用挂在本次执行下（parent = 本次 token），过宿主的审批与取消')
+  ok(String(c0.callId).startsWith('call_1:'), `子调用 id 能对回父调用：${String(c0.callId)}`)
+  ok(!('learner' in c0.arguments) && Object.keys(c0.arguments).every((k) =>
+    ['text', 'discipline', 'stage', 'limit', 'citableOnly'].includes(k)), '发给底座的只有检索参数，不带任何档案字段')
+  ok(viaMcp.returned === 2 && viaMcp.anchors[0].id === id1 && viaMcp.anchors[1].id === id2,
+    '按 MCP 的顺序回表快照字段', viaMcp.anchors.map((a: any) => a.id))
+  ok(viaMcp.anchors[0].grainWarning === '覆盖 3 个年级' && viaMcp.anchors[0].why.length === 1, '带上 MCP 的粒度警告与命中理由')
+  ok(/1 条候选不在随包快照里/.test(viaMcp.route.note), '快照里没有的 ID 不编字段，如实报数', viaMcp.route.note)
+  const viaText = (makeFindCapability(makeMcpBridge(up.tools, 'k12')).output.render as any)({}, viaMcp)[0].text as string
+  ok(viaText.startsWith('［经底座 MCP · 底座 v1.4］'), `渲染抬头说明走了 MCP：${viaText.split('\n')[0]}`)
+  const fcm = makeFindCapability(makeMcpBridge(up.tools, 'k12')) as any
+  ok(fcm.presentResult({}, { content: [{ type: 'text', text: viaText }] }).title === '检索能力锚点（经底座 MCP）', '完成卡片标出「经底座 MCP」')
+
+  // 没挂 MCP
+  const none = fakeTools({ has: false })
+  const noMcp = await makeFindCapability(makeMcpBridge(none.tools, 'k12')).execute({ query: '背诵', limit: 3 }, EXEC2) as any
+  ok(noMcp.route.via === 'snapshot' && /宿主里没有 mcp__k12__search_anchors/.test(noMcp.route.note), '没挂 MCP 时退回快照并说明', noMcp.route.note)
+  ok(noMcp.returned === 3 && none.calls.length === 0, '没挂就不调，结果与快照检索一致')
+  ok(/不进底座的使用计数/.test(noMcp.route.note), '兜底时明说这次不会被底座计数')
+
+  // MCP 调用失败 / 报错 / 形状不对 —— 都要退回快照而不是崩，也不许静默
+  const fail = fakeTools({ has: true, reply: () => ({ isError: true, error: { message: '审批被拒' } }) })
+  const r5 = await makeFindCapability(makeMcpBridge(fail.tools, 'k12')).execute({ query: '背诵' }, EXEC2) as any
+  ok(r5.route.via === 'snapshot' && /审批被拒/.test(r5.route.note), 'MCP 子调用失败 → 快照，并带出失败原因', r5.route.note)
+  const err = fakeTools({ has: true, reply: () => textBlock({ error: '映射器调用失败：python3 不在' }) })
+  const r6 = await makeFindCapability(makeMcpBridge(err.tools, 'k12')).execute({ query: '背诵' }, EXEC2) as any
+  ok(r6.route.via === 'snapshot' && /python3 不在/.test(r6.route.note), 'MCP 返回 error → 快照，并带出底座的报错', r6.route.note)
+  const junk = fakeTools({ has: true, reply: () => ({ isError: false, value: { content: [{ type: 'image' }] } }) })
+  const r7 = await makeFindCapability(makeMcpBridge(junk.tools, 'k12')).execute({ query: '背诵' }, EXEC2) as any
+  ok(r7.route.via === 'snapshot' && /形状不认识/.test(r7.route.note), '返回形状不认识 → 快照', r7.route.note)
+
+  // 纯列举没有 MCP 等价物：不调
+  const list = fakeTools({ has: true, reply: () => textBlock({ candidates: [] }) })
+  const r8 = await makeFindCapability(makeMcpBridge(list.tools, 'k12')).execute({ discipline: '语文', limit: 2 }, EXEC2) as any
+  ok(r8.route.via === 'snapshot' && list.calls.length === 0, '没给 query 的列举不调 MCP', r8.route)
+
+  // substrate_info 报告路由状态：只探测，绝不调用
+  const probe = fakeTools({ has: true, reply: () => textBlock({}) })
+  const info2 = await makeSubstrateInfo(makeMcpBridge(probe.tools, 'k12')).execute({}, EXEC2) as any
+  ok(info2.queryRoute.mcpMounted === true && probe.calls.length === 0, 'substrate_info 探测到 MCP 但不调用它（报告状态不许被计数）')
+  ok(info2.sourceVersion === (SNAP.sourceVersion ?? ''), `substrate_info 报出快照版本 ${info2.sourceVersion}`)
+  const info3 = await makeSubstrateInfo(makeMcpBridge(none.tools, 'k12')).execute({}, EXEC2) as any
+  ok(info3.queryRoute.mcpMounted === false && /全部查询走随包快照/.test(info3.queryRoute.note), 'substrate_info 如实报告 MCP 不可用')
+
+  await throws(async () => makeMcpBridge(up.tools, 'bad name!'), 'serverName 不合法时配置期就报错', /mcpServerName 不合法/)
 
   // ── 7. 落盘内容 ───────────────────────────────────────────────
   console.log('\n【7】档案文件本身')

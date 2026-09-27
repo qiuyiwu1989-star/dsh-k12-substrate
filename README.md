@@ -58,6 +58,17 @@ Or insert into your own `cordis.yml`:
 
 The last two can be disabled with `readOnly: true`.
 
+### Search can go through the substrate's MCP server
+
+When the host mounts the substrate's MCP server (via the official bridge `@deepseek-ai/dsh-mcp-client`, `serverName: k12`), `k12_find_capability` with a `query` searches through it: live substrate data, the substrate's own ranking, a grain warning on every hit, and the hit is recorded by the substrate's usage counter (anchor IDs and counts only). Without it, the tool falls back to the bundled snapshot. Which path was taken is stated in the `route` field and on the first line of the result — never a silent fallback.
+
+```bash
+K12_TAXONOMY_ROOT=/path/to/os-k12-taxonomy \
+  dsh web --patch ./examples/mcp/cordis.patch.yml --patch ./cordis.patch.yml
+```
+
+What goes through MCP, what doesn't, and the counting rules: [docs/mcp.md](docs/mcp.md) (Chinese).
+
 ## Three hard rules
 
 **1. Profiles stay local, and only counts are echoed back.**
@@ -76,7 +87,7 @@ An assertion pointing at an unreviewed anchor means measuring a child with an un
 ```bash
 pnpm install
 pnpm snapshot   # rebuild the data snapshot from ../os-k12-taxonomy
-pnpm verify     # typecheck + 69 assertions
+pnpm verify     # typecheck + smoke assertions (no DSH runtime, never starts the real MCP server)
 pnpm build
 ```
 
