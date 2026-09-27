@@ -8,22 +8,21 @@ Data comes from [China's MOE *Compulsory Education Curriculum Standards (2022)*]
 
 ## What this is NOT
 
-This section comes first, because **mistaking it for full-curriculum coverage is worse than not installing it**.
+This section comes first, because **mistaking this for teacher-validated data is worse than not installing it**.
 
-1,339 candidate anchors were extracted from the standards. **Only 146** cleared the bar of "objectively decidable, no teacher review required" and ship in this package:
+This package ships **2,866 usable anchors across 24 subjects** (source: `data/substrate.json`, built from substrate v1.4). What "usable" means matters more than the number:
 
-| | count |
-|---|---|
-| Fragments cut from the standards | 4,841 |
-| Passed the decidability gate | 1,339 |
-| Survived AI review | 600 |
-| **Writable to a child's profile (what this plugin exposes)** | **146** |
+| | count | what it means |
+|---|---|---|
+| Objectively decidable | 146 | correctness is mechanical — a character is written correctly or it isn't |
+| Judged by AI against the verbatim standard text | 2,720 | an AI read the source page and **found no fault** |
+| **Signed off by a teacher** | **0** | **none** |
 
-Those 146 concentrate in **Chinese character recognition/writing/recitation** and **English vocabulary** — because correctness there is objective: either the character is written correctly or it isn't.
+So **"usable" means "an AI checked it and found no fault" — not "a teacher approved it."** Treat every anchor that way.
 
-**Math, physics, and chemistry anchors are not available.** Judging them requires pedagogical judgement ("can apply the number-shape combination idea"), and no teacher has reviewed them, so they are excluded. `k12_substrate_info` reports this boundary, and `k12_find_capability` honestly returns 0 results for math — **absence here does not mean absence from the standards**.
+Math, physics, chemistry and the rest are now included (math: 332). There are **4,878 dependency edges** among usable anchors, so the plugin can answer "what should be learned before this" — but those edges were proposed by a model and retagged in two stages, **not validated by a teacher either**.
 
-For the same reason this plugin **cannot answer "what should be learned first"**. Only 2 dependency edges exist among usable anchors, both from measured set containment (basic character list ⊂ common character list 1, measured 95%; English level-2 vocab ⊂ level-3, measured 100%). That is not a learning path.
+One more boundary: anchors are at the **granularity of the national standard**, not of a lesson. Most span a whole stage (e.g. grades 1–2). Mapping a single lesson to one tells you *where it sits*, not that the child has finished learning it. Each result carries a granularity warning for this reason.
 
 ## Install
 
@@ -80,7 +79,7 @@ What goes through MCP, what doesn't, and the counting rules: [docs/mcp.md](docs/
 Only a `holder` starting with `teacher:` or `parent:` is recorded as `confirmed`. The model saying a child knows something does not make it so, and silence is not confirmation. `k12_learner_progress` reports the two separately.
 
 **3. Only usable anchors can be referenced.**
-An assertion pointing at an unreviewed anchor means measuring a child with an unvalidated ruler. Passing an ID outside the 146 raises an error.
+An assertion pointing at an unreviewed anchor means measuring a child with an unvalidated ruler. Passing an ID outside the usable set raises an error.
 
 ## Development
 
