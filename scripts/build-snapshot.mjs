@@ -162,6 +162,12 @@ const snapshot = {
       return execSync(`git -C "${SRC}" rev-parse --short HEAD`, { encoding: 'utf8' }).trim()
     } catch { return null }
   })(),
+  // 底座的数据版本（根目录 VERSION，如 1.4）。commit 给人回溯用，版本号给产品说话用 ——
+  // 「快照停在 v1.4」比「快照停在 5f671c4b2」能让人一眼看出落后了没有。
+  // 读不到就是 null，不猜。
+  sourceVersion: (() => {
+    try { return readFileSync(join(SRC, 'VERSION'), 'utf8').trim() || null } catch { return null }
+  })(),
   sourceRepo: 'https://github.com/qiuyiwu1989-star/k12-knowledge-substrate',
   standard: '中华人民共和国教育部《义务教育课程标准（2022年版）》',
   counts: {
@@ -182,7 +188,7 @@ const file = join(OUT, 'substrate.json')
 writeFileSync(file, JSON.stringify(snapshot))
 const kb = (statSync(file).size / 1024).toFixed(0)
 
-console.log(`✓ ${file}  ${kb} KB`)
+console.log(`✓ ${file}  ${kb} KB  底座 v${snapshot.sourceVersion ?? '?'} @ ${snapshot.sourceCommit ?? '?'}`)
 const pend = slimAnchors.filter((a) => a.pendingObjection).length
 console.log(`  可用锚点 ${slimAnchors.length} / ${anchors.length}`
   + `（其中 ${pend} 条为 AI 裁定待异议，${slimAnchors.length - pend} 条判定客观）`)

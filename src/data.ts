@@ -86,6 +86,8 @@ export interface Edge {
 export interface Snapshot {
   schemaVersion: string
   sourceCommit: string | null
+  /** 底座数据版本（taxonomy 根目录 VERSION）。老快照没有这个字段 */
+  sourceVersion?: string | null
   sourceRepo: string
   standard: string
   counts: {
