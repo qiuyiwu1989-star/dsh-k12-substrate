@@ -144,6 +144,12 @@ export function makeFindCapability(mcp: McpBridge = makeMcpBridge(undefined, '')
       discipline: { type: 'string', description: '学科，如「语文」「英语」。经 MCP 检索时强烈建议给，不给会跨科召回' },
       stage: { type: 'string', description: '年级 G1–G12，返回该年级适用的锚点' },
       limit: { type: 'integer', description: `返回上限，默认 20，最大 ${N}` },
+      deep: {
+        type: 'boolean',
+        description: 'query 是一道题或一段课堂语言（而不是课标术语）时设 true：底座先把它改写成课标说法再检索，'
+          + '再由模型从候选里挑。慢几秒，但字面对不上的内容只有这样找得到'
+          + '（底座 100 道真题基准：第一名命中 27% → 61%）。只在经底座 MCP 时生效',
+      },
     },
     output: {
       schema: {
@@ -215,6 +221,7 @@ export function makeFindCapability(mcp: McpBridge = makeMcpBridge(undefined, '')
         limit,
         // 只要可被档案引用的 —— 和快照的「可用」是同一份定义（底座 mappings/citable.json）
         citableOnly: true,
+        ...(args.deep ? { deep: true } : {}),
       })
       if (m.ok && Array.isArray(m.data.candidates)) {
         const anchors: ReturnType<typeof project>[] = []
