@@ -303,6 +303,27 @@ try {
   ok(saved.assertions.every((a: any) => a.predicate === 'MASTERED'), 'predicate 统一')
   ok(saved.assertions.every((a: any) => ['proposed', 'confirmed'].includes(a.confidence)), 'confidence 取值合法')
 
+  // ── 8. 说明文字里的数字跟快照走 ─────────────────────────────────
+  // README / package.json 的数字是手打的，底座每升一版就得跟着改。
+  // 漏改过：快照已是 v1.8，README 还在说 v1.7 的 3,123 条。这一节让它漏不掉。
+  console.log('\n【8】说明文字里的数字与快照一致')
+  {
+    const snap = JSON.parse(readFileSync(new URL('../data/substrate.json', import.meta.url), 'utf8'))
+    const n = snap.anchors.length.toLocaleString('en-US')
+    const ai = snap.anchors.filter((a: any) => a.reviewStatus !== 'auto-confirmed' && a.reviewStatus !== 'expert-confirmed')
+      .length.toLocaleString('en-US')
+    const edges = snap.edges.length.toLocaleString('en-US')
+    const en = readFileSync(new URL('../README.md', import.meta.url), 'utf8')
+    const zh = readFileSync(new URL('../README.zh.md', import.meta.url), 'utf8')
+    const pkg = readFileSync(new URL('../package.json', import.meta.url), 'utf8')
+    ok(en.includes(`**${n} usable anchors`), `README.md 写的可用数是 ${n}`)
+    ok(en.includes(`substrate v${snap.sourceVersion}`), `README.md 写的底座版本是 v${snap.sourceVersion}`)
+    ok(en.includes(`| ${ai} |`) && zh.includes(`另 ${ai} 条`), `两份 README 写的 AI 判过条数是 ${ai}`)
+    ok(en.includes(`**${edges} dependency edges**`), `README.md 写的边数是 ${edges}`)
+    ok(zh.includes(`底座 v${snap.sourceVersion}`), `README.zh.md 写的底座版本是 v${snap.sourceVersion}`)
+    ok(pkg.includes(`${n} usable capability anchors`) && pkg.includes(`${ai} AI-checked`), 'package.json 描述里的数字一致')
+  }
+
 } finally {
   rmSync(DIR, { recursive: true, force: true })
 }
