@@ -322,6 +322,15 @@ try {
     ok(en.includes(`**${edges} dependency edges**`), `README.md 写的边数是 ${edges}`)
     ok(zh.includes(`底座 v${snap.sourceVersion}`), `README.zh.md 写的底座版本是 v${snap.sourceVersion}`)
     ok(pkg.includes(`${n} usable capability anchors`) && pkg.includes(`${ai} AI-checked`), 'package.json 描述里的数字一致')
+    const auto = (snap.anchors.length - snap.anchors.filter((a: any) => a.reviewStatus !== 'auto-confirmed' && a.reviewStatus !== 'expert-confirmed').length).toLocaleString('en-US')
+    const rw = snap.anchors.filter((a: any) => a.source === 'capability-rewrite').length.toLocaleString('en-US')
+    const li = snap.counts.listItems.toLocaleString('en-US')
+    ok(en.includes(`| Objectively decidable | ${auto} |`) && zh.includes(`其中 ${auto} 条判定客观`) && pkg.includes(`${auto} objectively decidable`),
+       `三处写的判定客观条数是 ${auto}`)
+    // 能力转写是我们自己的判断，不是课标原话 —— 这个数必须对外写明，且写对
+    ok(en.includes(`our own capability rewrites** | ${rw} |`) && zh.includes(`其中 ${rw} 条是**我们自己的能力转写**`) && pkg.includes(`${rw} are our own capability rewrites`),
+       `三处写的能力转写条数是 ${rw}`)
+    ok(pkg.includes(`${li} list items`), `package.json 写的清单条目是 ${li}`)
   }
 
 } finally {
