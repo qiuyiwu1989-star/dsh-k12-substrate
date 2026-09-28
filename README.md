@@ -10,7 +10,7 @@ Data comes from [China's MOE *Compulsory Education Curriculum Standards (2022)*]
 
 This section comes first, because **mistaking this for teacher-validated data is worse than not installing it**.
 
-This package ships **3,123 usable anchors across 24 subjects** (source: `data/substrate.json`, built from substrate v1.6). What "usable" means matters more than the number:
+This package ships **3,123 usable anchors across 24 subjects** (source: `data/substrate.json`, built from substrate v1.7). What "usable" means matters more than the number:
 
 | | count | what it means |
 |---|---|---|
