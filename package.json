@@ -1,7 +1,7 @@
 {
   "name": "dsh-k12-substrate",
   "version": "0.1.0",
-  "description": "K12 capability substrate for DeepSeek Harness: 4,127 usable capability anchors across 24 subjects (223 objectively decidable + 3,904 AI-checked, of which 912 are our own capability rewrites, against the verbatim standard; 0 teacher-signed) and 6,339 list items, extracted from China's MOE curriculum standards. Search routes through the substrate's MCP server when attached.",
+  "description": "K12 capability substrate for DeepSeek Harness: 4,231 usable capability anchors across 24 subjects (223 objectively decidable + 4,008 AI-checked, of which 912 are our own capability rewrites, against the verbatim standard; 0 teacher-signed) and 6,339 list items, extracted from China's MOE curriculum standards. Search routes through the substrate's MCP server when attached.",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
