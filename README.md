@@ -10,7 +10,7 @@ Data comes from [China's MOE *Compulsory Education Curriculum Standards (2022)*]
 
 This section comes first, because **mistaking this for teacher-validated data is worse than not installing it**.
 
-This package ships **3,444 usable anchors across 24 subjects** (source: `data/substrate.json`, built from substrate v1.9). What "usable" means matters more than the number:
+This package ships **3,444 usable anchors across 24 subjects** (source: `data/substrate.json`, built from substrate v1.10). What "usable" means matters more than the number:
 
 | | count | what it means |
 |---|---|---|
@@ -20,7 +20,7 @@ This package ships **3,444 usable anchors across 24 subjects** (source: `data/su
 
 So **"usable" means "an AI checked it and found no fault" — not "a teacher approved it."** Treat every anchor that way.
 
-Math, physics, chemistry and the rest are now included (math: 361). There are **4,831 dependency edges** among usable anchors, so the plugin can answer "what should be learned before this" — but those edges were proposed by a model and retagged in two stages, **not validated by a teacher either**.
+Math, physics, chemistry and the rest are now included (math: 361). There are **4,812 dependency edges** among usable anchors, so the plugin can answer "what should be learned before this" — but those edges were proposed by a model and retagged in two stages, **not validated by a teacher either**.
 
 One more boundary: anchors are at the **granularity of the national standard**, not of a lesson. Most span a whole stage (e.g. grades 1–2). Mapping a single lesson to one tells you *where it sits*, not that the child has finished learning it. Each result carries a granularity warning for this reason.
 
